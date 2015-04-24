@@ -43,6 +43,10 @@ class LiquibaseRunner
 
     }
 
+    /**
+    * Execute liquibase
+    * @todo execute using Process
+    */
     protected function run($command)
     {
         $output = "";
