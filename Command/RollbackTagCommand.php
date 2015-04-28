@@ -9,19 +9,24 @@ use Symfony\Component\Console\Output\OutputInterface;
 use RtxLabs\LiquibaseBundle\Generator\ChangelogGenerator;
 use RtxLabs\LiquibaseBundle\Runner\LiquibaseRunner;
 
-class UpdateCommand extends ContainerAwareCommand
+class RollbackTagCommand extends ContainerAwareCommand
 {
     protected function configure()
     {
         $this
-            ->setName('liquibase:update:run')
-            ->setDescription('Generating a Liquibase changelog file skeleton')
+            ->setName('liquibase:rollback:tag')
+            ->setDescription('Rollback to specific tag')
             ->addArgument('bundle', InputArgument::OPTIONAL,
                           'The name of the bundle (shortcut notation AcmeDemoBundle) for that the changelogs should run or all bundles if no one is given')
-            ->addOption('dry-run', 'd', InputOption::VALUE_NONE, 'outputs the SQL-Statements that would run')
-        ;
+            ->addArgument('tag', InputArgument::OPTIONAL,
+                'Specifying a tag to rollback will roll back all change-sets that were executed against the target database after the given tag was applied')
+            ->addOption('dry-run', 'd', InputOption::VALUE_NONE, 'outputs the SQL-Statements that would run');
     }
 
+    /**
+     * @param InputInterface $input
+     * @param OutputInterface $output
+     */
     protected function execute(InputInterface $input, OutputInterface $output)
     {
         $runner = new LiquibaseRunner(
@@ -30,16 +35,18 @@ class UpdateCommand extends ContainerAwareCommand
 
         $bundle = $input->getArgument('bundle');
         $kernel = $this->getContainer()->get('kernel');
+        $tag    = $input->getArgument('tag');
         try {
             if (strlen($bundle) > 0) {
-                $result = $runner->runBundleUpdate($kernel->getBundle($bundle));
+                $result = $runner->runBundleRollbackTag($kernel->getBundle($bundle), $tag);
             } else {
-                $result = $runner->runAppUpdate($kernel);
+                $result = $runner->runAppRollbackTag($kernel, $tag);
             }
 
             $output->writeln('');
             $output->writeln('<info>' . $result . '</info>');
         } catch (\RuntimeException $e) {
+            $output->writeln('');
             $output->writeln('<error>' . $e->getMessage() . '</error>');
         }
     }

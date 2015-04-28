@@ -1,43 +1,143 @@
 <?php
 namespace RtxLabs\LiquibaseBundle\Runner;
-use Symfony\Component\HttpKernel\Util\Filesystem;
+
 use Symfony\Component\Process\Process;
+use Symfony\Component\Filesystem\Filesystem;
+use Symfony\Component\HttpKernel\KernelInterface;
+use Symfony\Component\HttpKernel\Bundle\BundleInterface;
 
 class LiquibaseRunner
 {
     private $filesystem;
     private $dbConnection;
 
+    /**
+     * @param Filesystem $filesystem
+     * @param $dbConnection
+     */
     public function __construct(Filesystem $filesystem, $dbConnection)
     {
-        $this->filesystem = $filesystem;
+        $this->filesystem   = $filesystem;
         $this->dbConnection = $dbConnection;
     }
 
-    public function runAppUpdate(\Symfony\Component\HttpKernel\KernelInterface $kernel)
+    /**
+     * @param KernelInterface $kernel
+     * @return string
+     */
+    public function runAppUpdate(KernelInterface $kernel)
     {
-        $this->runUpdate($kernel->getRootDir().'/Resources/liquibase/changelog-master.xml');
+        return $this->runUpdate($kernel->getRootDir() . '/Resources/liquibase/changelog-master.xml');
     }
 
-    public function runBundleUpdate(\Symfony\Component\HttpKernel\Bundle\BundleInterface $bundle)
+    /**
+     * @param BundleInterface $bundle
+     * @return string
+     */
+    public function runBundleUpdate(BundleInterface $bundle)
     {
-        $this->runUpdate($bundle->getPath().'/Resources/liquibase/changelog-master.xml');
+        return $this->runUpdate($bundle->getPath() . '/Resources/liquibase/changelog-master.xml');
     }
 
+    /**
+     * @param KernelInterface $kernel
+     * @param $tag
+     * @return string
+     */
+    public function runAppRollbackTag(KernelInterface $kernel, $tag)
+    {
+        return $this->runRollbackTag(
+            $kernel->getRootDir() . '/Resources/liquibase/changelog-master.xml',
+            $tag
+        );
+    }
+
+    /**
+     * @param BundleInterface $bundle
+     * @param $tag
+     * @return string
+     */
+    public function runBundleRollbackTag(BundleInterface $bundle, $tag)
+    {
+        return $this->runRollbackTag(
+            $bundle->getPath() . '/Resources/liquibase/changelog-master.xml',
+            $tag
+        );
+    }
+
+    /**
+     * @param KernelInterface $kernel
+     * @param $tag
+     * @return string
+     */
+    public function runAppRollbackCount(KernelInterface $kernel, $count)
+    {
+        return $this->runRollbackCount(
+            $kernel->getRootDir() . '/Resources/liquibase/changelog-master.xml',
+            $count
+        );
+    }
+
+    /**
+     * @param BundleInterface $bundle
+     * @param $tag
+     * @return string
+     */
+    public function runBundleRollbackCount(BundleInterface $bundle, $count)
+    {
+        return $this->runRollbackCount(
+            $bundle->getPath() . '/Resources/liquibase/changelog-master.xml',
+            $count
+        );
+    }
+
+    /**
+     * @param $changelogFile
+     * @return string
+     */
     private function runUpdate($changelogFile)
     {
-        $command = $this->getBaseCommand();
-        $command .= ' --changeLogFile='.$changelogFile;
-        $command .= " update";
+        $command = $this->getBaseCommand()
+            . ' --changeLogFile=' . $changelogFile
+            . ' --logLevel=debug '
+            . ' update';
 
-        $this->run($command);
+        return $this->run($command);
     }
 
-    public function runRollback($bundle)
+    /**
+     * @param $changelogFile
+     * @param $tag
+     * @return string
+     */
+    private function runRollbackTag($changelogFile, $tag)
     {
+        $command = $this->getBaseCommand()
+            . ' --changeLogFile=' . $changelogFile
+            . ' --logLevel=debug'
+            . ' rollback ' . $tag;
 
+        return $this->run($command);
     }
 
+    /**
+     * @param $changelogFile
+     * @param $tag
+     * @return string
+     */
+    private function runRollbackCount($changelogFile, $count)
+    {
+        $command = $this->getBaseCommand()
+            . ' --changeLogFile=' . $changelogFile
+            . ' --logLevel=debug'
+            . ' rollbackCount ' . $count;
+
+        return $this->run($command);
+    }
+
+    /**
+     * @param $bundle
+     */
     public function runDiff($bundle)
     {
 
@@ -45,22 +145,29 @@ class LiquibaseRunner
 
     /**
     * Execute liquibase
-    * @todo execute using Process
     */
     protected function run($command)
     {
-        $output = "";
-        exec($command, $output);
+        echo $command;
+        $exec = new Process($command);
+        $exec->enableOutput();
+        $exec->getCommandLine();
+        $exec->run();
+        if (false === $exec->isSuccessful()) {
+            throw new \RuntimeException($exec->getErrorOutput());
+        }
 
-        echo $command."\n";
-        print_r($output);
+        return $exec->getOutput();
     }
 
+    /**
+     * @return string
+     */
     protected function getBaseCommand()
     {
         $dbalParams = $this->dbConnection->getParams();
 
-        $command = 'java -jar '.__DIR__.'/../Resources/vendor/liquibase.jar '.
+        $command = 'java -jar '.__DIR__.'/../Resources/vendor/liquibase.jar'.
                     ' --driver='.$this->getJdbcDriverName($dbalParams['driver']).
                     ' --url='.$this->getJdbcDsn($dbalParams);
 
@@ -77,54 +184,77 @@ class LiquibaseRunner
         return $command;
     }
 
+    /**
+     * @param $dbalDriver
+     * @return string
+     */
     protected function getJdbcDriverName($dbalDriver)
     {
         switch($dbalDriver) {
+            case 'pdo_pgsql':
+                $driver = "org.postgresql.Driver";
+                break;
             case 'pdo_mysql':
-            case 'mysql':   $driver = "com.mysql.jdbc.Driver"; break;
-            default: throw new \RuntimeException("No JDBC-Driver found for $dbalDriver");
+            case 'mysql':
+                $driver = "com.mysql.jdbc.Driver";
+                break;
+            default:
+                throw new \RuntimeException("No JDBC-Driver found for $dbalDriver");
         }
 
         return $driver;
     }
 
+    /**
+     * @param $dbalDriver
+     * @return string
+     */
     protected function getJdbcDriverClassPath($dbalDriver)
     {
         $dir = dirname(__FILE__)."/../Resources/vendor/jdbc/";
 
         switch($dbalDriver) {
+            case 'pdo_pgsql':
+                $dir .= "postgresql-9.3.jdbc4-20131010.203348-4.jar";
+                break;
             case 'pdo_mysql':
-            case 'mysql':   $dir .= "mysql-connector-java-5.1.18-bin.jar"; break;
-            default: throw new \RuntimeException("No JDBC-Driver found for $dbalDriver");
+            case 'mysql':
+                $dir .= "mysql-connector-java-5.1.18-bin.jar";
+                break;
+            default:
+                throw new \RuntimeException("No JDBC-Driver found for $dbalDriver");
         }
 
         return $dir;
     }
 
+    /**
+     * @param $dbalParams
+     * @return string
+     */
     protected function getJdbcDsn($dbalParams)
     {
         switch($dbalParams['driver']) {
-            case 'pdo_mysql': return $this->getMysqlJdbcDsn($dbalParams); break;
+            case 'pdo_pgsql': return $this->generateDsn($dbalParams); break;
+            case 'pdo_mysql': return $this->generateDsn($dbalParams); break;
             default: throw new \RuntimeException("Database not supported");
         }
     }
 
-    protected function getMysqlJdbcDsn($dbalParams)
+    /**
+     * @param $dbalParams
+     * @return string
+     */
+    protected function generateDsn($dbalParams)
     {
-        $dsn = "jdbc:mysql://";
-        if ($dbalParams['host'] != "") {
-            $dsn .= $dbalParams['host'];
-        }
-        else {
-            $dsn .= 'localhost';
+        $db = 'mysql';
+        if ($dbalParams['driver'] == 'pdo_pgsql') {
+            $db = 'postgresql';
         }
 
-        if ($dbalParams['port'] != "") {
-            $dsn .= ":".$dbalParams['port'];
-        }
-
-        $dsn .= "/".$dbalParams['dbname'];
-
-        return $dsn;
+        return sprintf("jdbc:%s://%s/%s",
+            $db,
+            $dbalParams['host'],
+            $dbalParams['dbname']);
     }
 }

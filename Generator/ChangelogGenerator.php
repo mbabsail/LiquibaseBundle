@@ -12,26 +12,31 @@ class ChangelogGenerator extends Generator
 
     public function __construct(Filesystem $filesystem, $skeletonDir)
     {
-        $this->filesystem = $filesystem;
-        $this->skeletonDir = $skeletonDir;
+        $this->filesystem   = $filesystem;
+        $this->skeletonDir  = $skeletonDir;
     }
 
+    /**
+     * @param $bundle
+     * @param $name
+     * @param bool $withChangeset
+     * @param string $author
+     */
     public function generate($bundle, $name, $withChangeset = true, $author = "")
     {
-        $parameters = array(
-            'author'=>$author,
-            'withChangeset'=>$withChangeset
-        );
+        $parameters = [
+            'author'        => $author,
+            'withChangeset' => $withChangeset,
+        ];
 
         if ($bundle == null) {
             $changelogPath = 'app/Resources/liquibase/';
-        }
-        else {
+        } else {
             $changelogPath = $bundle->getPath().'/Resources/liquibase/';
         }
 
-        $changelogFile = $changelogPath.'changelogs/'.$name.'.xml';
-        $changelogMasterFile = $changelogPath.'changelog-master.xml';
+        $changelogFile          = $changelogPath . 'changelogs/' . $name . '.xml';
+        $changelogMasterFile    = $changelogPath . 'changelog-master.xml';
 
         if (file_exists($changelogFile)) {
             throw new \RuntimeException(sprintf('Changelog "%s" already exists.', $changelogFile));
@@ -40,7 +45,7 @@ class ChangelogGenerator extends Generator
         $this->renderFile($this->skeletonDir, 'changelog.xml', $changelogFile, $parameters);
 
         if (!file_exists($changelogMasterFile)) {
-            $parameter = array('path'=>$changelogPath.'changelogs/');
+            $parameter = array('path' => $changelogPath.'changelogs/');
             $this->renderFile($this->skeletonDir, 'changelog-master.xml', $changelogMasterFile, $parameter);
         }
     }
