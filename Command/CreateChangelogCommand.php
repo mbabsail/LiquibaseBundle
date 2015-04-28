@@ -32,11 +32,10 @@ class CreateChangelogCommand extends ContainerAwareCommand
 
         if (strlen($bundle) > 0) {
             $bundle = $this->getContainer()->get('kernel')->getBundle($bundle);
-        }
-        else {
+        } else {
             $bundle = null;
         }
-        
+
         $generator->generate($bundle, $name, $input->getOption('with-changeset'), $input->getOption('author'));
     }
 
